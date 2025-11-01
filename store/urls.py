@@ -1,7 +1,10 @@
+# store/urls.py
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import (ProductViewSet, CategoryViewSet, CartViewSet,
-                    AddressViewSet, OrderViewSet, register, LoginAndMergeTokenView)
+from .views import (
+    ProductViewSet, CategoryViewSet, CartViewSet,
+    AddressViewSet, OrderViewSet, register, LoginAndMergeTokenView
+)
 from rest_framework_simplejwt.views import TokenRefreshView
 from .views_payments import (
     khalti_initiate, khalti_callback,
@@ -21,13 +24,15 @@ urlpatterns = [
     path('cart/update-qty/', CartViewSet.as_view({'post': 'update_qty'})),
     path('cart/remove/', CartViewSet.as_view({'post': 'remove'})),
 
-    # Addresses (JWT)
-    path('addresses/', AddressViewSet.as_view({'get':'list','post':'create'})),
+    # Addresses
+    path('addresses/', AddressViewSet.as_view({'get': 'list', 'post': 'create'})),
 
-    # Orders (JWT)
-    path('orders/', OrderViewSet.as_view({'post':'create'})),
-    path('orders/<int:pk>/pay/', OrderViewSet.as_view({'post':'pay'})),
-    path('orders/<int:pk>/mark-paid/', OrderViewSet.as_view({'post':'mark_paid'})),
+    # Orders
+    path('orders/', OrderViewSet.as_view({'post': 'create'})),
+    path('orders/<int:pk>/pay/', OrderViewSet.as_view({'post': 'pay'})),
+    path('orders/<int:pk>/mark-paid/', OrderViewSet.as_view({'post': 'mark_paid'})),
+    path('orders/<int:pk>/upload-bank-proof/', OrderViewSet.as_view({'post': 'upload_bank_proof'})),
+    path('orders/<int:pk>/verify-payment/', OrderViewSet.as_view({'post': 'verify_payment'})),
 
     # Auth
     path('auth/register/', register),

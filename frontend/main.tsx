@@ -1,0 +1,1 @@
+import './index.css'  // ADD THIS LINE

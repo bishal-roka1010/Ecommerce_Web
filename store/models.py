@@ -1,100 +1,176 @@
+# store/models.py
 from django.db import models
 from django.contrib.auth.models import User
+from rest_framework import serializers
 
-# ---------- League ----------
+
+# ==================== CORE MODELS ====================
+
 class League(models.Model):
-    name = models.CharField(max_length=120)
-    country = models.CharField(max_length=120, blank=True)
-    def __str__(self): return self.name
+    name = models.CharField(max_length=100)
+    country = models.CharField(max_length=100)
+    
+    def __str__(self):
+        return self.name
 
-# ---------- Team ----------
+
 class Team(models.Model):
-    name = models.CharField(max_length=120)
-    league = models.ForeignKey(League, on_delete=models.SET_NULL, null=True, related_name='teams')
-    def __str__(self): return self.name
+    name = models.CharField(max_length=100)
+    league = models.ForeignKey(League, on_delete=models.CASCADE)
+    
+    def __str__(self):
+        return self.name
 
-# ---------- Category ----------
+
 class Category(models.Model):
-    name = models.CharField(max_length=120)
+    name = models.CharField(max_length=100)
     slug = models.SlugField(unique=True)
-    def __str__(self): return self.name
+    
+    def __str__(self):
+        return self.name
 
-# ---------- Product ----------
+
 class Product(models.Model):
     title = models.CharField(max_length=200)
     slug = models.SlugField(unique=True)
-    description = models.TextField(blank=True)
-    team = models.ForeignKey(Team, on_delete=models.SET_NULL, null=True, blank=True)
-    category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True)
+    description = models.TextField()
     price = models.DecimalField(max_digits=10, decimal_places=2)
-    image = models.ImageField(upload_to='products/', blank=True, null=True)
+    image = models.ImageField(upload_to='products/')
+    category = models.ForeignKey(Category, on_delete=models.CASCADE)
+    team = models.ForeignKey(Team, on_delete=models.SET_NULL, null=True, blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    def __str__(self): return self.title
+    
+    def __str__(self):
+        return self.title
 
-# ---------- Variant ----------
-SIZES = (('S','Small'), ('M','Medium'), ('L','Large'), ('XL','Extra Large'), ('XXL','Double Extra Large'))
+
 class ProductVariant(models.Model):
+    SIZES = [('S', 'Small'), ('M', 'Medium'), ('L', 'Large'), ('XL', 'X-Large')]
+    
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='variants')
-    size = models.CharField(max_length=4, choices=SIZES)
+    size = models.CharField(max_length=10, choices=SIZES)
     stock = models.PositiveIntegerField(default=0)
     sku = models.CharField(max_length=50, unique=True)
-    def __str__(self): return f"{self.product.title} - {self.size}"
+    
+    def __str__(self):
+        return f"{self.product.title} - {self.size}"
 
-# ---------- Cart (guest or user) ----------
+
 class Cart(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
-    session_id = models.CharField(max_length=64, blank=True)  # guest via header X-Session-Id
+    session_id = models.CharField(max_length=100, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"Cart {self.id} ({self.user or 'Guest'})"
+
 
 class CartItem(models.Model):
     cart = models.ForeignKey(Cart, on_delete=models.CASCADE, related_name='items')
     variant = models.ForeignKey(ProductVariant, on_delete=models.CASCADE)
     quantity = models.PositiveIntegerField(default=1)
+    
+    def __str__(self):
+        return f"{self.quantity} x {self.variant}"
 
-# ---------- Address (JWT) ----------
+
 class Address(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    full_name = models.CharField(max_length=120)
-    phone = models.CharField(max_length=30)
-    province = models.CharField(max_length=120)
-    city = models.CharField(max_length=120)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='addresses')
     street = models.CharField(max_length=200)
-    landmark = models.CharField(max_length=200, blank=True)
+    city = models.CharField(max_length=100)
+    state = models.CharField(max_length=100)
+    zip_code = models.CharField(max_length=20)
+    country = models.CharField(max_length=100, default='Nepal')
     is_default = models.BooleanField(default=False)
-    def __str__(self): return f"{self.full_name} - {self.city}"
+    
+    def __str__(self):
+        return f"{self.street}, {self.city}"
 
-# ---------- Orders (JWT) ----------
+
 class Order(models.Model):
-    STATUS = (('PENDING','Pending'), ('PAID','Paid'), ('SHIPPED','Shipped'), ('CANCELLED','Cancelled'))
-    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    STATUS_CHOICES = [
+        ('PENDING', 'Pending'),
+        ('PAID', 'Paid'),
+        ('SHIPPED', 'Shipped'),
+        ('DELIVERED', 'Delivered'),
+        ('CANCELLED', 'Cancelled'),
+    ]
+    
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
     address = models.ForeignKey(Address, on_delete=models.SET_NULL, null=True)
     total = models.DecimalField(max_digits=10, decimal_places=2)
-    status = models.CharField(max_length=20, choices=STATUS, default='PENDING')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
     created_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"Order {self.id} - {self.user}"
+
 
 class OrderItem(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='items')
-    variant = models.ForeignKey(ProductVariant, on_delete=models.SET_NULL, null=True)
+    variant = models.ForeignKey(ProductVariant, on_delete=models.CASCADE)
     price = models.DecimalField(max_digits=10, decimal_places=2)
     quantity = models.PositiveIntegerField()
+    
+    def __str__(self):
+        return f"{self.quantity} x {self.variant}"
 
-# store/models.py (only the Payment class shown; keep others as-is)
-from django.db import models
+
+# ==================== PAYMENT MODELS ====================
 
 class Payment(models.Model):
-    order = models.OneToOneField('Order', on_delete=models.CASCADE, related_name='payment')
-    provider = models.CharField(max_length=20)  # 'khalti' | 'esewa'
-    reference = models.CharField(max_length=120, blank=True)  # e.g., refId (eSewa) or transaction_id (Khalti)
+    PAYMENT_METHODS = [
+        ('COD', 'Cash on Delivery'),
+        ('ESEWA', 'eSewa'),
+        ('KHALTI', 'Khalti'),
+        ('BANK', 'Bank Transfer'),
+    ]
+    
+    order = models.OneToOneField(Order, on_delete=models.CASCADE, related_name='payment')
+    provider = models.CharField(max_length=20, choices=PAYMENT_METHODS)
+    reference = models.CharField(max_length=120, blank=True)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     is_verified = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
-
-    # new: gateway metadata
-    pidx = models.CharField(max_length=64, blank=True)             # Khalti payment id
-    transaction_uuid = models.CharField(max_length=64, blank=True) # eSewa unique id
+    
+    # Gateway metadata
+    pidx = models.CharField(max_length=64, blank=True)
+    transaction_uuid = models.CharField(max_length=64, blank=True)
     meta = models.JSONField(default=dict, blank=True)
+    
+    # Manual payment uploads
+    payment_receipt = models.ImageField(upload_to='payment_receipts/', blank=True, null=True)
+    transaction_id = models.CharField(max_length=100, blank=True)
+    notes = models.TextField(blank=True)
+    
+    # Bank transfer fields
+    bank_name = models.CharField(max_length=100, blank=True)
+    account_holder = models.CharField(max_length=100, blank=True)
+    deposit_slip = models.ImageField(upload_to='deposit_slips/', blank=True, null=True)
 
     def __str__(self):
-        return f"{self.provider} payment for Order {self.order_id}"
+        return f"{self.get_provider_display()} payment for Order {self.order_id}"
+
+
+class PaymentQRCode(models.Model):
+    PAYMENT_TYPE_CHOICES = [
+        ('ESEWA', 'eSewa'),
+        ('BANK', 'Bank Transfer'),
+    ]
+    
+    payment_type = models.CharField(max_length=20, choices=PAYMENT_TYPE_CHOICES, unique=True)
+    qr_code = models.ImageField(upload_to='qr_codes/')
+    account_name = models.CharField(max_length=200)
+    account_number = models.CharField(max_length=100, blank=True)
+    instructions = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"{self.get_payment_type_display()} QR Code"
+    
+    class Meta:
+        verbose_name = 'Payment QR Code'
+        verbose_name_plural = 'Payment QR Codes'

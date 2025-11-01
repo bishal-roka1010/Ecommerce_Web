@@ -249,3 +249,48 @@ class LoginAndMergeTokenView(TokenObtainPairView):
             # don't break login if merge has issues
             pass
         return response
+# Add to the end of views.py
+
+@action(detail=True, methods=['post'])
+def upload_bank_proof(self, request, pk=None):
+    """Upload bank transfer proof"""
+    order = get_object_or_404(Order, pk=pk, user=request.user)
+    
+    if not hasattr(order, 'payment') or order.payment.provider != 'BANK':
+        return Response({'detail': 'This order does not use bank transfer'}, status=400)
+    
+    payment = order.payment
+    payment.bank_name = request.data.get('bank_name', '')
+    payment.account_holder = request.data.get('account_holder', '')
+    payment.reference = request.data.get('reference_number', '')
+    
+    if 'deposit_slip' in request.FILES:
+        payment.deposit_slip = request.FILES['deposit_slip']
+    
+    payment.save()
+    
+    return Response({
+        'ok': True,
+        'message': 'Bank transfer details uploaded. Awaiting admin verification.'
+    })
+
+@action(detail=True, methods=['post'])
+def verify_payment(self, request, pk=None):
+    """Admin endpoint to verify bank/COD payments"""
+    if not request.user.is_staff:
+        return Response({'detail': 'Admin access required'}, status=403)
+    
+    order = get_object_or_404(Order, pk=pk)
+    
+    if hasattr(order, 'payment'):
+        order.payment.is_verified = True
+        order.payment.save()
+        order.status = 'PAID'
+        order.save()
+        return Response({'ok': True, 'message': 'Payment verified'})
+    
+    return Response({'detail': 'No payment record found'}, status=400)
+
+# Attach to OrderViewSet class
+OrderViewSet.upload_bank_proof = upload_bank_proof
+OrderViewSet.verify_payment = verify_payment
